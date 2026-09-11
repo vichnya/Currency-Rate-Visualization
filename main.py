@@ -1,124 +1,128 @@
+import matplotlib.pyplot as plt
+
+plt.rcdefaults()
+
+import numpy as np
 import datetime
 from urllib.request import urlopen
 from xml.etree import ElementTree as ET
 
-import matplotlib.pyplot as plt
-import numpy as np
 
-
-CURRENCIES = [
-    "R01239",  # Евро
-    "R01235",  # Доллар США
-    "R01035",  # Фунт стерлингов
-    "R01090B", # Китайский юань
-    "R01535",  # Японская иена
-    "R01820",  # Белорусский рубль
-    "R01760",  # Украинская гривна
-    "R01700J", # Казахстанский тенге
-    "R01115",  # Швейцарский франк
-    "R01585F", # Польский злотый
-    "R01565",  # Турецкая лира
-]
-
-
-def get_currencies(currencies_ids=None):
-    """Получает актуальные курсы выбранных валют."""
-    if currencies_ids is None:
-        currencies_ids = CURRENCIES
-
-    url = "https://www.cbr.ru/scripts/XML_daily.asp"
-    response = urlopen(url)
-
-    root = ET.parse(response).getroot()
-    result = {}
-
-    for element in root.findall("Valute"):
-        valute_id = element.get("ID")
-
-        if valute_id in currencies_ids:
-            name = element.find("Name").text
-            value = element.find("Value").text
-            result[name] = value
-
-    return result
-
-
-def get_currencies_year(currency_id="R01235"):
-    """Получает динамику курса валюты за последние 12 месяцев."""
-    today = datetime.date.today()
-    year_ago = today - datetime.timedelta(days=365)
-
-    date_req1 = year_ago.strftime("%d/%m/%Y")
-    date_req2 = today.strftime("%d/%m/%Y")
-
-    url = (
-        "https://www.cbr.ru/scripts/XML_dynamic.asp"
-        f"?date_req1={date_req1}"
-        f"&date_req2={date_req2}"
-        f"&VAL_NM_RQ={currency_id}"
+def get_currencies(currencies_ids_lst=[
+    'R01239', 'R01235', 'R01035', 'R01090B', 'R01535', 'R01820', 'R01760',
+    'R01700J', 'R01115', 'R01585F', 'R01565'
+]):
+    cur_res_str = urlopen(
+        "https://www.cbr.ru/scripts/XML_daily.asp"
     )
 
-    response = urlopen(url)
-    root = ET.parse(response).getroot()
-
     result = {}
 
-    for element in root.findall("Record"):
-        date = element.get("Date")
-        value = element.find("Value").text
-        result[date] = value
+    cur_res_xml = ET.parse(cur_res_str)
+    root = cur_res_xml.getroot()
+
+    valutes = root.findall('Valute')
+
+    for el in valutes:
+        valute_id = el.get('ID')
+
+        if str(valute_id) in currencies_ids_lst:
+            valute_cur_val = el.find('Value').text
+            result[el.find('Name').text] = valute_cur_val
 
     return result
 
 
-def visualize_data():
-    """Строит графики курсов валют."""
-    currencies = get_currencies()
+def get_currencies_year(currencies_id='R01235'):
+    today = datetime.date.today()
 
-    names = list(currencies.keys())
-    values = [
-        float(value.replace(",", "."))
-        for value in currencies.values()
-    ]
+    date_req1 = (
+        today - datetime.timedelta(days=365)
+    ).strftime('%d/%m/%Y')
 
-    dollar_history = get_currencies_year()
+    date_req2 = today.strftime('%d/%m/%Y')
 
-    dates = [
-        datetime.datetime.strptime(date, "%d.%m.%Y")
-        for date in dollar_history.keys()
-    ]
+    cur_res_str = urlopen(
+        f"https://www.cbr.ru/scripts/XML_dynamic.asp"
+        f"?date_req1={date_req1}"
+        f"&date_req2={date_req2}"
+        f"&VAL_NM_RQ={currencies_id}"
+    )
 
-    dollar_values = [
-        float(value.replace(",", "."))
-        for value in dollar_history.values()
-    ]
+    result = {}
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 9))
+    cur_res_xml = ET.parse(cur_res_str)
+    root = cur_res_xml.getroot()
 
-    x_positions = np.arange(len(names))
+    valutes = root.findall('Record')
 
-    axes[0].bar(x_positions, values)
-    axes[0].set_title("Текущие курсы валют ЦБ РФ")
-    axes[0].set_ylabel("Курс")
-    axes[0].set_xlabel("Валюта")
-    axes[0].set_xticks(x_positions)
-    axes[0].set_xticklabels(names, rotation=45, ha="right")
-    axes[0].grid(axis="y")
+    for el in valutes:
+        valute_date = el.get('Date')
+        valute_cur_val = el.find('Value').text
+        result[valute_date] = valute_cur_val
 
-    axes[1].plot(dates, dollar_values)
-    axes[1].set_title("Динамика курса доллара США за последние 12 месяцев")
-    axes[1].set_ylabel("Курс, руб.")
-    axes[1].set_xlabel("Дата")
-    axes[1].grid(True)
-
-    fig.suptitle("Курсы валют Центрального банка РФ")
-    plt.tight_layout()
-    plt.show()
+    return result
 
 
-def main():
-    visualize_data()
+cur_vals = get_currencies()
 
+objects = cur_vals.keys()
 
-if __name__ == "__main__":
-    main()
+y_pos = np.arange(len(objects))
+
+x_pos = [
+    float(item.replace(",", "."))
+    for item in cur_vals.values()
+]
+
+fig, axs = plt.subplots(2, 1, figsize=(12, 9), sharey=False)
+
+for i in range(len(x_pos)):
+    axs[0].bar(y_pos[i], x_pos[i])
+
+axs[0].set_ylabel('Курс валюты')
+axs[0].set_xlabel('Номер валюты')
+axs[0].set_title('Текущий курс валют')
+
+axs[0].set_xticks(y_pos)
+axs[0].set_xticklabels(
+    range(1, len(objects) + 1)
+)
+
+axs[0].legend(
+    objects,
+    bbox_to_anchor=(1, 1)
+)
+
+cur_vals_year = get_currencies_year()
+
+objects_year = cur_vals_year.keys()
+
+dates = [
+    datetime.datetime.strptime(
+        date,
+        '%d.%m.%Y'
+    )
+    for date in objects_year
+]
+
+x_pos = [
+    float(item.replace(",", "."))
+    for item in cur_vals_year.values()
+]
+
+axs[1].plot(dates, x_pos)
+
+axs[1].set_ylabel('Курс валюты')
+axs[1].set_xlabel('Дата')
+axs[1].set_title(
+    'Динамика курса доллара США за последние 12 месяцев'
+)
+
+axs[1].legend(['Доллар США'])
+axs[1].grid(True)
+
+fig.suptitle('Курсы валют Центрального банка РФ')
+
+plt.tight_layout()
+plt.show()
